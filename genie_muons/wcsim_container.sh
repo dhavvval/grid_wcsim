@@ -33,9 +33,14 @@ echo "WCSim directory contents:" >> /srv/logfile_${PART_NAME}.txt
 ls -lrth >> /srv/logfile_${PART_NAME}.txt
 echo "" >> /srv/logfile_${PART_NAME}.txt
 
+# WCSim creates one file per beamOn call (wcsim_${PART_NAME}_0.root, _1.root, ...).
+# Merge them into a single file before staging.
+hadd -f wcsim_${PART_NAME}.root wcsim_${PART_NAME}_*.root >> /srv/logfile_${PART_NAME}.txt 2>&1
+\rm wcsim_${PART_NAME}_*.root
+
 # copy any produced files to /srv for extraction
-\cp wcsim_*.root /srv/ 
-\cp wcsim_lappd_*.root /srv/
+\cp wcsim_${PART_NAME}.root /srv/
+#\cp wcsim_lappd_${PART_NAME}.root /srv/   # uncomment if you need LAPPD files
 
 # make sure any output files you want to keep are put in /srv or any subdirectory of /srv 
 
