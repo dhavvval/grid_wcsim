@@ -16,9 +16,9 @@ os.system('rm -rf ' + LOCAL_TARBALL)
 os.system('tar -czvf ' + LOCAL_TARBALL + ' -C ' + WCSIM_LOC + ' WCSim')
 
 print('\nStaging to pnfs scratch...\n')
-os.system('ifdh mkdir_p ' + INPUT_PATH)
-os.system('ifdh cp ' + LOCAL_TARBALL + ' ' + INPUT_PATH + 'WCSim.tar.gz')
-os.system('ifdh cp ' + BASE_DIR + '/wcsim_container.sh ' + INPUT_PATH + 'wcsim_container.sh')
-os.system('ifdh cp ' + BASE_DIR + '/run_job.sh ' + INPUT_PATH + 'run_job.sh')
+os.system('mkdir -p ' + INPUT_PATH)
+os.system('mv ' + LOCAL_TARBALL + ' ' + INPUT_PATH + 'WCSim.tar.gz')
+os.system('cp ' + BASE_DIR + '/wcsim_container.sh ' + INPUT_PATH + 'wcsim_container.sh')
+os.system('cp ' + BASE_DIR + '/run_job.sh ' + INPUT_PATH + 'run_job.sh')
 
 print('\ndone!\n')
