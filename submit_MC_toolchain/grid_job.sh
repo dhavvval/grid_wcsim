@@ -12,7 +12,7 @@ EOF
 HOSTNAME=$(hostname -f)
 
 # ****************************************************** #
-GRIDUSER="doran"               # adjust accordingly!
+GRIDUSER="dajana"              # adjust accordingly!
 TA_folder=NC_CC_Nov_6_2025     # adjust accordingly!
 # ****************************************************** #
 

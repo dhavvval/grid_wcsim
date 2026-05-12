@@ -1,13 +1,16 @@
 RUN=$1
 BATCH=$2
 
-export INPUT_PATH=/pnfs/annie/scratch/users/dajana/grid_wcsim/dirt_muons/
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "${REPO_ROOT}/config.sh"
+
+export INPUT_PATH="${PNFS_SCRATCH}/WCSim_grid/dirt_muons/"
 
 echo ""
 echo "submitting job..."
 echo ""
 
-OUTPUT_FOLDER=/pnfs/annie/scratch/users/dajana/output/dirt_muons/${BATCH}
+OUTPUT_FOLDER="${PNFS_PERSISTENT}/output/dirt_muons/${BATCH}"
 mkdir -p $OUTPUT_FOLDER                                                 
 
 # wrapper script to submit your grid job

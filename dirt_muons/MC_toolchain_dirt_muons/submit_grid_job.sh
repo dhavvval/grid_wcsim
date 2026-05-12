@@ -3,9 +3,12 @@
 
 RUN=$1
 
-export INPUT_PATH=/pnfs/annie/scratch/users/doran/submit_MC_toolchain/
-export OUTPUT_FOLDER=/pnfs/annie/scratch/users/doran/output/genie_muons/Trees/thru/QE_1.50_HM_1.50_2/
-export WCSIM_FILES_PATH=/pnfs/annie/scratch/users/doran/output/genie_muons/pmt_tilting_dirt_QE_1.50_HM_1.50_2/
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+source "${REPO_ROOT}/config.sh"
+
+export INPUT_PATH="${PNFS_SCRATCH}/WCSim_grid/MC_toolchain_dirt_muons/"
+export OUTPUT_FOLDER="${PNFS_PERSISTENT}/output/dirt_muons/Trees/"
+export WCSIM_FILES_PATH="${PNFS_PERSISTENT}/output/dirt_muons/"
 
 mkdir -p $OUTPUT_FOLDER
 

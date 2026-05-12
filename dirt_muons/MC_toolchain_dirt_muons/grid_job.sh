@@ -10,7 +10,7 @@ output   dir: $CONDOR_DIR_OUTPUT
 EOF
 
 HOSTNAME=$(hostname -f)
-GRIDUSER="doran"
+GRIDUSER="dajana"
 
 # part name
 FIRST_ARG=$1

@@ -1,8 +1,11 @@
 RUN=$1
 
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "${REPO_ROOT}/config.sh"
+
 # WORLD samples only run ~600 events per 20k GENIE file aka need low grid resources (recommended: 2GB mem, 4h walltime, 5GB disk)
 
-export INPUT_PATH=/pnfs/annie/scratch/users/doran/genie_wcsim_grid/  
+export INPUT_PATH="${PNFS_SCRATCH}/WCSim_grid/genie_samples/"
 export GENIE=/pnfs/annie/persistent/simulations/genie3/G1810a0211a/standardv1.0/world/
 export DIRT=/pnfs/annie/persistent/simulations/g4dirt/G1810a0211a/standardv1.0/world/
 
@@ -10,7 +13,7 @@ echo ""
 echo "submitting job..."
 echo ""
 
-OUTPUT_FOLDER=/pnfs/annie/scratch/users/doran/output/genie_wcsim
+OUTPUT_FOLDER="${PNFS_PERSISTENT}/output/genie_wcsim"
 mkdir -p $OUTPUT_FOLDER                                                 
 
 # wrapper script to submit your grid job

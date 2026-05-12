@@ -1,10 +1,13 @@
 import os,sys
 import time
 
-user = '{user}'
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config import GRIDUSER, WCSIM_LOC, PNFS_SCRATCH
 
-WCSim_loc = '/exp/annie/app/users/' + user + '/grid_wcsim/'
-INPUT_PATH = '/pnfs/annie/scratch/users/' + user + '/grid_wcsim/'
+user = GRIDUSER
+WCSim_loc = WCSIM_LOC
+INPUT_PATH = f'{PNFS_SCRATCH}/WCSim_grid/genie_muons/'
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 job_label = 'blacksheet_plus/'        # This will also serve as the embedded output folder
 
@@ -155,13 +158,30 @@ for i in range(N_jobs):
 
 time.sleep(1)
 
+LOCAL_TARBALL = os.path.join(BASE_DIR, 'WCSim.tar.gz')
+
 # tar WCSim
 print('\ntar-ing WCSim for grid submission...\n')
-os.system('rm -rf WCSim.tar.gz')   # remove old tar file
-os.system('cd ' + WCSim_loc)
-os.system('tar -czvf WCSim.tar.gz -C ' + WCSim_loc + ' WCSim')
+os.system('rm -rf ' + LOCAL_TARBALL)
+os.system('tar -czvf ' + LOCAL_TARBALL + ' -C ' + WCSim_loc + ' WCSim')
 time.sleep(1)
 
+# Stage shared files to pnfs scratch (accessible from grid workers)
+print('\nStaging files to pnfs scratch...\n')
+os.system('ifdh mkdir_p ' + INPUT_PATH)
+os.system('ifdh cp ' + LOCAL_TARBALL + ' ' + INPUT_PATH + 'WCSim.tar.gz')
+os.system('ifdh cp ' + BASE_DIR + '/wcsim_container.sh ' + INPUT_PATH + 'wcsim_container.sh')
+os.system('ifdh cp ' + BASE_DIR + '/run_job.sh ' + INPUT_PATH + 'run_job.sh')
+
+# Stage per-job .mac files to pnfs scratch
+print('\nStaging per-job WCSim.mac files to pnfs scratch...\n')
+for i in range(N_jobs):
+    starting_event = i*events_per_job
+    ending_event = (i+1)*events_per_job - 1
+    job_number = str(starting_event) + '_' + str(ending_event)
+    os.system('ifdh mkdir_p ' + INPUT_PATH + 'submit/' + job_number)
+    os.system('ifdh cp submit/' + job_number + '/WCSim.mac ' + INPUT_PATH + 'submit/' + job_number + '/WCSim.mac')
+time.sleep(1)
 
 print('\nSending jobs...\n')
 for i in range(N_jobs):

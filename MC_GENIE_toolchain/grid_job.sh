@@ -13,7 +13,7 @@ HOSTNAME=$(hostname -f)
 
 # ****************************************************** #
 # adjust accordingly!
-GRIDUSER="doran"
+GRIDUSER="dajana"
 TA_folder=NC_CC_Nov_6_2025
 # ****************************************************** #
 

@@ -1,4 +1,5 @@
 import os
+import sys
 
 # -- Submit WCSim jobs that run over the GENIE + flux files
 # -- Returns wcsim.root files created from GENIE samples
@@ -7,7 +8,10 @@ import os
 
 # There are a total of 5k GENIE + flux files for the WORLD events
 
-INPUT_PATH = '/pnfs/annie/scratch/users/doran/genie_wcsim_grid/'
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config import PNFS_SCRATCH
+
+INPUT_PATH = f'{PNFS_SCRATCH}/WCSim_grid/genie_samples/'  # staging area; set by tar_wcsim.py
 
 print('\nPlease specify the range of genie files you would like to loop over')
 min_g = input('\nmin genie file #:    ')    #          (min = 0)

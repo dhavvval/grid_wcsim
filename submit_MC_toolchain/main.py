@@ -2,9 +2,13 @@
 # Author: Steven Doran
 
 import os
+import sys
 import time
 import re
 import subprocess
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+from config import PNFS_PERSISTENT
 
 #
 #
@@ -14,7 +18,7 @@ import subprocess
 
 ''' Please modify the following to reflect your working directory '''
 
-wcsim_file_path = '/pnfs/annie/scratch/users/doran/output/genie_muons/thru_individual_tilts/'     # wcsim root files from the grid
+wcsim_file_path = f'{PNFS_PERSISTENT}/output/genie_muons/thru_individual_tilts/'     # wcsim root files from the grid
 
 # from previous jobs
 '''

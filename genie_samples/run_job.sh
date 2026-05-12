@@ -8,7 +8,7 @@ output   dir: $CONDOR_DIR_OUTPUT
 EOF
 
 HOSTNAME=$(hostname -f) 
-GRIDUSER="doran"            
+GRIDUSER="dajana"
 
 # Argument passed through job submission 
 PART_NAME=$1
