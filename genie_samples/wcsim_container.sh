@@ -23,13 +23,15 @@ echo "" >> /srv/logfile_${PART_NAME}.txt
 # source setup script
 source sourceme >> /srv/logfile_${PART_NAME}.txt
 chmod +x WCSim
+export LD_LIBRARY_PATH=$(pwd):$LD_LIBRARY_PATH
+patchelf --set-rpath '$ORIGIN' WCSim >> /srv/logfile_${PART_NAME}.txt 2>&1
 
 echo "" >> /srv/logfile_${PART_NAME}.txt
 
 echo "running WCSim..." >> /srv/logfile_${PART_NAME}.txt
 
 # Run the toolchain, and output verbose to log file 
-./WCSim WCSim.mac >> /srv/logfile_${PART_NAME}.txt
+./WCSim WCSim.mac >> /srv/logfile_${PART_NAME}.txt 2>&1
 
 echo "" >> /srv/logfile_${PART_NAME}.txt
 echo "-----------------------------------------" >> /srv/logfile_${PART_NAME}.txt 
