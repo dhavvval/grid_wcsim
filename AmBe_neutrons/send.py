@@ -38,7 +38,7 @@ job_labels = [
 ####################
 events_per_job = 1000
 ####################
-N_jobs = 20
+N_jobs = 50
 ####################
 total_events = int(N_jobs*events_per_job)
 
@@ -241,7 +241,7 @@ for jl in job_labels:
 
     # uncomment for testing
     #if count > 1:
-    #    continue
+        #continue
     #count += 1
 
     submit_batch(WCSim_loc, jl, events_per_job)

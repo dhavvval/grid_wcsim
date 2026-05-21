@@ -17,7 +17,7 @@ LOCAL_TARBALL = os.path.join(BASE_DIR, 'WCSim.tar.gz')
 SUBMIT_PATH = os.path.join(BASE_DIR, 'submit')
 SUBMIT_SCRIPT = os.path.join(BASE_DIR, 'submit_wcsim_job.sh')
 
-job_label = 'test/'        # This will also serve as the embedded output folder
+job_label = 'production_v1/'        # This will also serve as the embedded output folder
 
 # dirt muon count from GENIE files: 10000
 
@@ -25,9 +25,9 @@ job_label = 'test/'        # This will also serve as the embedded output folder
 # We need to randomly sample the dirt muons to simulate way more events (~500k). 
 
 ####################
-events_per_job = 10
+events_per_job = 500
 ####################
-N_jobs = 1
+N_jobs = 1000
 ####################
 total_events = int(N_jobs*events_per_job)
 

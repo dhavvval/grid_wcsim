@@ -10,7 +10,7 @@ echo ""
 echo "submitting job..."
 echo ""
 
-OUTPUT_FOLDER=/pnfs/annie/scratch/users/dajana/output/wcsim/AmBe/pmt_tilting_v1/${QE_tag}/${BATCH}/
+OUTPUT_FOLDER=/pnfs/annie/persistent/users/dajana/AmBe_Neutron_ExpSpecturm_WCSim/productionv1/${QE_tag}/${BATCH}/
 mkdir -p $OUTPUT_FOLDER                                                 
 
 # default grid resources:
