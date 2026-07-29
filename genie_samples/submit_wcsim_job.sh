@@ -4,13 +4,13 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "${REPO_ROOT}/config.sh"
 
 # ---------------------------------------------------------------- edit me ----
-VOLUME=tank                     # tank | world -- sets the GENIE, dirt and output paths together
-BEAMON=4000                     # GENIE entries per job.  tank: 4000    world: 20000
-PRODUCTION=productionv3         # output subdir
+VOLUME=world                     # tank | world -- sets the GENIE, dirt and output paths together
+BEAMON=20000                     # GENIE entries per job.  tank: 4000    world: 20000
+PRODUCTION=productionv3/world         # output subdir
 
-MEMORY=8000MB
-LIFETIME=24h
-DISK=10GB
+MEMORY=3000MB
+LIFETIME=4h
+DISK=5GB
 OUTPUT_FOLDER="${PNFS_PERSISTENT}/output/genie_wcsim_${VOLUME}/${PRODUCTION}/"
 # ------------------------------------------------------------------------------
 
