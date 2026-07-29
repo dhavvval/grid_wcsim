@@ -7,7 +7,7 @@
 # But local A/B running needs the ABSOLUTE /pnfs paths. So the macro is swapped to grid mode,
 # tarred, and swapped back, with the tarball's copy verified before the swap-back is trusted.
 #
-# Run once before send.py / submit_wcsim_job.sh. Idempotent. Always re-tars: this script's job is
+# Run once before send.py / submit_wcsim_job.sh. Re-runnable. Always re-tars: this script's job is
 # to publish whatever is in the build dir right now, so it never tries to guess whether a re-tar
 # is needed. Run it when you change WCSim; skip it when you have not.
 #
@@ -124,9 +124,22 @@ tar -czf "${STAGE_TMP}/WCSim.tar.gz" -C "${WCSIM_LOC}" \
 echo "  built $(du -h "${STAGE_TMP}/WCSim.tar.gz" | cut -f1) tarball"
 
 mkdir -p "${INPUT_PATH}"
-cp "${STAGE_TMP}/WCSim.tar.gz" "${INPUT_PATH}/WCSim.tar.gz"
-cp "$(dirname "$0")/wcsim_container.sh" "${INPUT_PATH}/wcsim_container.sh"
-cp "$(dirname "$0")/run_job.sh"         "${INPUT_PATH}/run_job.sh"
+
+# dCache is write-once: creating a file is fine, writing over an existing one fails with
+# "Operation not permitted", and only unlink-then-create works. So every re-stage must remove the
+# old copy first -- without this the script succeeds exactly once and fails on every later run.
+stage_file() {
+  src="$1"; dst="$2"
+  rm -f "${dst}"
+  cp "${src}" "${dst}" || fail "could not stage ${dst}"
+  src_sz=$(stat -c%s "${src}"); dst_sz=$(stat -c%s "${dst}")
+  [ "${src_sz}" = "${dst_sz}" ] \
+    || fail "staged ${dst} is ${dst_sz} bytes, source is ${src_sz} -- copy truncated"
+}
+
+stage_file "${STAGE_TMP}/WCSim.tar.gz"           "${INPUT_PATH}/WCSim.tar.gz"
+stage_file "$(dirname "$0")/wcsim_container.sh"  "${INPUT_PATH}/wcsim_container.sh"
+stage_file "$(dirname "$0")/run_job.sh"          "${INPUT_PATH}/run_job.sh"
 echo "  staged to ${INPUT_PATH}"
 
 echo "=== 4. verify the TARBALL's copy is grid mode ==="
