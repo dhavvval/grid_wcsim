@@ -7,13 +7,15 @@ source "${REPO_ROOT}/config.sh"
 # default. Nothing below requires re-staging WCSim.tar.gz -- the tarball is the build, these are the
 # instructions. Re-run prep_backtrack_v3.sh only when you change WCSim itself.
 #
-#   VOLUME     tank (default) | world   which GENIE production to read
-#   BEAMON     how many GENIE entries this job reads (per-volume default below)
-#   PRODUCTION output subdir under genie_wcsim_<volume>/  (default productionv2)
-#   MEMORY / LIFETIME / DISK            grid resource request
+#   VOLUME        tank (default) | world   which GENIE production to read
+#   BEAMON        how many GENIE entries this job reads (per-volume default below)
+#   PRODUCTION    output subdir under genie_wcsim_<volume>/  (default productionv2)
+#   OUTPUT_FOLDER full output path, overriding PRODUCTION and the usual parent
+#   MEMORY / LIFETIME / DISK               grid resource request
 #
 #   VOLUME=world PRODUCTION=productionv3 sh submit_wcsim_job.sh 0
 #   BEAMON=8000 LIFETIME=12h MEMORY=4000MB sh submit_wcsim_job.sh 3
+#   OUTPUT_FOLDER=/pnfs/annie/scratch/users/dajana/mytest/ sh submit_wcsim_job.sh 0
 #
 # genie3 and g4dirt both carry symmetric tank/ and world/ subdirs with identical filenames, so a
 # volume switch moves only the two input paths and the output subdir. WCSim and run_job.sh are
@@ -62,9 +64,12 @@ echo "submitting: VOLUME=${VOLUME} RUN=${RUN} beamOn=${BEAMON} PRODUCTION=${PROD
 echo "            ${MEMORY} / ${LIFETIME} / ${DISK}"
 echo ""
 
-# Override the output subdir with PRODUCTION=... ; default unchanged.
-OUTPUT_FOLDER="${PNFS_PERSISTENT}/output/genie_wcsim_${VOLUME}/${PRODUCTION:-productionv2}/"
-mkdir -p $OUTPUT_FOLDER
+# PRODUCTION sets the subdir under the usual genie_wcsim_<volume>/ parent. OUTPUT_FOLDER overrides
+# the whole path when you want output somewhere else entirely; it wins over PRODUCTION.
+OUTPUT_FOLDER="${OUTPUT_FOLDER:-${PNFS_PERSISTENT}/output/genie_wcsim_${VOLUME}/${PRODUCTION:-productionv2}/}"
+mkdir -p "$OUTPUT_FOLDER" \
+  || { echo "cannot create output dir ${OUTPUT_FOLDER}" >&2; exit 1; }
+echo "            output -> ${OUTPUT_FOLDER}"
 
 # wrapper script to submit your grid job
 jobsub_submit --memory=${MEMORY} --expected-lifetime=${LIFETIME} -G annie --disk=${DISK} --blacklist=Omaha,Swan,Wisconsin,SU-ITS,RAL -f ${INPUT_PATH}/WCSim.tar.gz -f ${INPUT_PATH}/wcsim_container.sh -f ${DIRT}/annie_tank_flux.${RUN}.root -f ${GENIE}/gntp.${RUN}.ghep.root -d OUTPUT $OUTPUT_FOLDER file://${INPUT_PATH}/run_job.sh ${RUN} ${BEAMON}
