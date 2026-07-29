@@ -10,8 +10,12 @@ EOF
 HOSTNAME=$(hostname -f) 
 GRIDUSER="dajana"
 
-# Argument passed through job submission 
+# Arguments passed through job submission
 PART_NAME=$1
+# BEAMON_ARG_SUPPORTED -- marker grepped by submit_wcsim_job.sh and prep_backtrack_v3.sh. A staged
+# copy of this script predating the second argument would ignore it and silently run the tarball's
+# own /run/beamOn, so both scripts refuse to proceed unless this string is present.
+BEAMON=$2
 
 # Create a dummy log file in the output directory
 DUMMY_OUTPUT_FILE=${CONDOR_DIR_OUTPUT}/${JOBSUBJOBID}_dummy_output 
@@ -47,6 +51,17 @@ let "a=$RANDOM"
 b="/WCSim/random/seed"
 echo "$b $a" >> macros/setRandomParameters.mac
 echo "$b $a" >> ${DUMMY_OUTPUT_FILE}
+echo "" >> ${DUMMY_OUTPUT_FILE}
+
+# Set how many GENIE entries this job reads. Same idea as the seed above: a per-job value written
+# into the macro here rather than baked into WCSim.tar.gz, so one staged build serves the tank
+# sample (4000 entries, ~100% yield) and the world sample (20000 entries, ~3% yield) alike.
+# Empty means "whatever the tarball says", which keeps older submissions working.
+if [ -n "${BEAMON}" ]; then
+  sed -i -E "s|^/run/beamOn[[:space:]]+[0-9]+|/run/beamOn ${BEAMON}|" WCSim.mac
+  echo "beamOn override: ${BEAMON}" >> ${DUMMY_OUTPUT_FILE}
+fi
+echo "active beamOn: $(grep -E '^/run/beamOn' WCSim.mac)" >> ${DUMMY_OUTPUT_FILE}
 echo "" >> ${DUMMY_OUTPUT_FILE}
 echo "macros:" >> ${DUMMY_OUTPUT_FILE}
 ls macros/ >> ${DUMMY_OUTPUT_FILE}

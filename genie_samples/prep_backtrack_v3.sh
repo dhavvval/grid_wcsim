@@ -7,57 +7,35 @@
 # But local A/B running needs the ABSOLUTE /pnfs paths. So the macro is swapped to grid mode,
 # tarred, and swapped back, with the tarball's copy verified before the swap-back is trusted.
 #
-# Run once before send.py / submit_wcsim_job.sh. Idempotent.
+# Run once before send.py / submit_wcsim_job.sh. Idempotent. Always re-tars: this script's job is
+# to publish whatever is in the build dir right now, so it never tries to guess whether a re-tar
+# is needed. Run it when you change WCSim; skip it when you have not.
 #
-# VOLUME=tank (default) or VOLUME=world picks which sample this tarball is for. The two differ ONLY
-# in /run/beamOn, but that is enough that they cannot share a staging dir: world interactions are
-# spread through the hall and rock and only ~3% of entries put light in the tank, so a world job
-# reads the whole 20k-interaction file to yield ~600 events where a tank job gets 4000 from 4000.
-# Staging both to the same INPUT_PATH would leave whichever ran last serving both submissions --
-# silently, since the tarballs are otherwise identical. Hence genie_samples/ vs genie_samples_world/,
-# matching the same split in submit_wcsim_job.sh.
-#
-#   VOLUME=world sh prep_backtrack_v3.sh        # stage the world tarball (beamOn 20000)
-#   BEAMON=8000 sh prep_backtrack_v3.sh         # override the entry count for either volume
+# The tarball is THE BUILD AND NOTHING ELSE. Per-job settings -- which GENIE volume, how many
+# entries to read, what grid resources to ask for -- are arguments to submit_wcsim_job.sh, not
+# properties of this archive. That is why one tarball serves both the tank and world samples:
+# they differ only in input files and /run/beamOn, and run_job.sh sets beamOn on the worker.
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "${REPO_ROOT}/config.sh"
 
-VOLUME="${VOLUME:-tank}"
-case "${VOLUME}" in
-  tank)  DEFAULT_BEAMON=4000  ; STAGE_SUBDIR="genie_samples"       ;;
-  world) DEFAULT_BEAMON=20000 ; STAGE_SUBDIR="genie_samples_world" ;;
-  *)     echo "FAIL: VOLUME must be 'tank' or 'world' (got '${VOLUME}')" >&2; exit 1 ;;
-esac
-BEAMON="${BEAMON:-${DEFAULT_BEAMON}}"
-case "${BEAMON}" in ''|*[!0-9]*) echo "FAIL: BEAMON must be a positive integer" >&2; exit 1 ;; esac
-
 BUILD="${WCSIM_LOC}/WCSim/build"
 MAC="${BUILD}/macros/primaries_directory.mac"
 LOCAL_BACKUP="${MAC}.localmode"
-WCMAC="${BUILD}/WCSim.mac"
-WCMAC_BACKUP="${WCMAC}.localmode"
 STAGE_TMP=""
-
-echo "staging VOLUME=${VOLUME}  /run/beamOn ${BEAMON}  -> ${STAGE_SUBDIR}/"
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
-# If we die anywhere between the grid-mode swap and the restore, put the local-mode macros back --
+# If we die anywhere between the grid-mode swap and the restore, put the local-mode macro back --
 # otherwise the next local A/B run silently reads ./gntp.*.ghep.root from the build dir and finds
-# no primaries, and WCSim.mac is left on whatever beamOn the last staging wanted. Step 5 removes
-# both backups on success, making this a no-op.
+# no primaries. Step 5 removes the backup on success, making this a no-op.
 cleanup() {
   rc=$?
   if [ -f "${LOCAL_BACKUP}" ]; then
     mv -f "${LOCAL_BACKUP}" "${MAC}"
     echo "cleanup: restored ${MAC} to local absolute-path mode" >&2
-  fi
-  if [ -f "${WCMAC_BACKUP}" ]; then
-    mv -f "${WCMAC_BACKUP}" "${WCMAC}"
-    echo "cleanup: restored ${WCMAC} to its pre-staging /run/beamOn" >&2
   fi
   if [ -n "${STAGE_TMP}" ] && [ -d "${STAGE_TMP}" ]; then
     rm -rf "${STAGE_TMP}"
@@ -80,8 +58,8 @@ echo "  ok: WCSim executable knows /WCSimIO/SaveTracksOnDemand"
 
 grep -qE "^/WCSimIO/SaveTracksOnDemand[[:space:]]+true" "${BUILD}/WCSim.mac" \
   || fail "${BUILD}/WCSim.mac does not set /WCSimIO/SaveTracksOnDemand true"
-# beamOn is now SET by step 2 rather than asserted, so all we require here is that exactly one
-# active /run/beamOn line exists to rewrite. Two would make the second silently win.
+# run_job.sh rewrites /run/beamOn on the worker, so the value here is only a fallback -- but there
+# must be exactly one active line for that rewrite to land. Two and the second would silently win.
 [ "$(grep -cE '^/run/beamOn[[:space:]]+[0-9]+' "${BUILD}/WCSim.mac")" = "1" ] \
   || fail "${BUILD}/WCSim.mac must have exactly one active /run/beamOn line"
 grep -qE "^/mygen/generator[[:space:]]+beam" "${BUILD}/WCSim.mac" \
@@ -129,27 +107,12 @@ PLINE=$(grep -nE '^/mygen/primariesdirectory' "${MAC}" | cut -d: -f1)
 [ "${NLINE}" -lt "${PLINE}" ] || fail "neutrinosdirectory (line ${NLINE}) must precede primariesdirectory (line ${PLINE})"
 echo "  ok: grid-mode macro valid, ordering correct"
 
-echo "=== 2b. set /run/beamOn for VOLUME=${VOLUME} ==="
-# Same swap-tar-restore discipline as the primaries macro: the build dir keeps whatever beamOn the
-# user had for local running, and only the tarball carries the grid value.
-cp -p "${WCMAC}" "${WCMAC_BACKUP}"
-python3 - "${WCMAC}" "${BEAMON}" <<'PY'
-import re, sys
-p, n = sys.argv[1], sys.argv[2]
-lines = open(p).read().splitlines(True)
-out = [re.sub(r'^/run/beamOn\s+[0-9]+', '/run/beamOn ' + n, ln) for ln in lines]
-open(p, 'w').writelines(out)
-PY
-grep -qE "^/run/beamOn[[:space:]]+${BEAMON}\$" "${WCMAC}" \
-  || fail "failed to set /run/beamOn ${BEAMON} in ${WCMAC}"
-echo "  ok: $(grep -E '^/run/beamOn' "${WCMAC}")"
-
 echo "=== 3. tar + stage to pnfs scratch ==="
 # Deliberately NOT calling tar_wcsim.py: it packs the whole WCSim/ tree, which now includes a
 # 178 MB WCSim/WCSim/.git and the 4.4 MB bt_artifacts_20ev/ A/B keep-dir. None of that is needed
 # at runtime and all of it would be transferred to every one of ~251 worker nodes. Same staging
 # destination and same three files as tar_wcsim.py, just with excludes.
-INPUT_PATH="${PNFS_SCRATCH}/WCSim_grid/${STAGE_SUBDIR}/"
+INPUT_PATH="${PNFS_SCRATCH}/WCSim_grid/genie_samples/"
 STAGE_TMP="$(mktemp -d)"
 
 tar -czf "${STAGE_TMP}/WCSim.tar.gz" -C "${WCSIM_LOC}" \
@@ -182,18 +145,19 @@ echo "${TARRED_MAC}" | grep -qE '^/mygen/neutrinosdirectory[[:space:]]+\./gntp\.
 if echo "${TARRED_MAC}" | grep -qE '^/mygen/(neutrinos|primaries)directory[[:space:]]+/'; then
   fail "tarball's primaries_directory.mac still has an active absolute path"
 fi
-TARRED_WCMAC=$(tar -xzOf "${TARBALL}" WCSim/build/WCSim.mac)
-echo "${TARRED_WCMAC}" | grep -qE '^/WCSimIO/SaveTracksOnDemand[[:space:]]+true' \
+tar -xzOf "${TARBALL}" WCSim/build/WCSim.mac | grep -qE '^/WCSimIO/SaveTracksOnDemand[[:space:]]+true' \
   || fail "tarball's WCSim.mac does not set SaveTracksOnDemand true"
-# The whole point of the volume split -- a world tarball carrying tank's beamOn would run and
-# produce a believable file with 1/5 the entries read.
-echo "${TARRED_WCMAC}" | grep -qE "^/run/beamOn[[:space:]]+${BEAMON}\$" \
-  || fail "tarball's WCSim.mac is not at /run/beamOn ${BEAMON} (VOLUME=${VOLUME})"
 if tar -tzf "${TARBALL}" | grep -q '^WCSim/build/wcsim_0\.root$'; then
   fail "tarball contains a stale wcsim_0.root"
 fi
-echo "  ok: tarball verified (grid-mode primaries, SaveTracksOnDemand true, beamOn ${BEAMON}, no stale output)"
+echo "  ok: tarball verified (grid-mode primaries, SaveTracksOnDemand true, no stale output)"
 echo "  tarball size: $(du -h "${TARBALL}" | cut -f1)"
+
+# submit_wcsim_job.sh refuses to submit against a run_job.sh that predates the BEAMON argument,
+# so make sure what we just staged actually has it.
+grep -q 'BEAMON_ARG_SUPPORTED' "${INPUT_PATH}/run_job.sh" \
+  || fail "staged run_job.sh has no BEAMON support -- it is not the copy from this repo"
+echo "  ok: staged run_job.sh accepts the BEAMON argument"
 
 echo "=== 5. restore local mode ==="
 mv -f "${LOCAL_BACKUP}" "${MAC}"
@@ -201,21 +165,21 @@ mv -f "${LOCAL_BACKUP}" "${MAC}"
   || fail "restore did not leave exactly 2 active absolute-path directives in ${MAC}"
 grep -E '^/mygen/(neutrinos|primaries)directory' "${MAC}"
 echo "  ok: ${MAC} restored to local absolute-path mode"
-mv -f "${WCMAC_BACKUP}" "${WCMAC}"
-echo "  ok: ${WCMAC} restored ($(grep -E '^/run/beamOn' "${WCMAC}"))"
 
-MAXRUN=$([ "${VOLUME}" = "world" ] && echo 4998 || echo 499)
 cat <<EOF
 
-Staged VOLUME=${VOLUME} (beamOn ${BEAMON}) to ${INPUT_PATH}
-To submit (needs a valid token -- run 'htgettoken -i annie -a htvaultprod.fnal.gov' first):
+Staged the build to ${INPUT_PATH} -- it serves both volumes.
+Everything below is per-job; nothing needs a re-stage.
+Needs a valid token: htgettoken -i annie -a htvaultprod.fnal.gov
 
-  # pilot, one job:
-  VOLUME=${VOLUME} PRODUCTION=productionv3 sh ${REPO_ROOT}/genie_samples/submit_wcsim_job.sh 0
+  # world, one file (RUN 0-4998):
+  VOLUME=world PRODUCTION=productionv3 sh ${REPO_ROOT}/genie_samples/submit_wcsim_job.sh 0
 
-  # fan out after the pilot passes (RUN index max for ${VOLUME} is ${MAXRUN}):
-  for i in \$(seq 1 250); do VOLUME=${VOLUME} PRODUCTION=productionv3 sh ${REPO_ROOT}/genie_samples/submit_wcsim_job.sh \$i; done
+  # tank fan-out (RUN 0-499):
+  for i in \$(seq 1 250); do PRODUCTION=productionv3 sh ${REPO_ROOT}/genie_samples/submit_wcsim_job.sh \$i; done
 
-Output lands in \${PNFS_PERSISTENT}/output/genie_wcsim_${VOLUME}/productionv3/
+  # override anything per job:
+  BEAMON=8000 MEMORY=4000MB LIFETIME=12h DISK=6GB VOLUME=world \\
+    PRODUCTION=productionv3 sh ${REPO_ROOT}/genie_samples/submit_wcsim_job.sh 0
 
 EOF
