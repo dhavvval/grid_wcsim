@@ -1,18 +1,26 @@
 # genie_analysis — grid-parallel FMVMRD analysis
 
-Runs the `CC_MC_RECO_ntuple_neutrino_FMVMRDTEST` toolchain over the deduped
-dual-production WCSim set, one grid job per file number. The grid analog of
-`EB_BC_TA/run_cc_neutrino_fmvmrd_batch.sh`.
+Runs the `CC_MC_RECO_ntuple_neutrino_FMVMRDTEST` toolchain over the **productionv3**
+WCSim set, one grid job per file number. The grid analog of
+`EB_BC_TA_work/scripts/run_cc_neutrino_fmvmrd_v3_batch.sh` (the serial batch in the
+`ccv3_fmvmrd` tmux session).
 
-Each `wcsim_<N>.root` -> `ANNIEEvent_cc_neutrino_<N>.root` is independent, so all
-~370 files run in parallel instead of serially. Mirrors the WCSim grid scripts in
+Each `wcsim_<N>.root` -> `ANNIEEvent_cc_neutrino_v3_<N>.root` is independent, so the
+files run in parallel instead of one after another — the serial batch measured ~10 min
+each, i.e. ~63 h for the ~380 remaining. Mirrors the WCSim grid scripts in
 `../genie_samples/`.
 
-## Selection (dedup) — same rule as the serial batch
-- All productionv2 files in [0,499].
-- testv2 files in [0,499] whose number is ABSENT from productionv2 (gap-fill).
-- testv2 N >= 500 reuse an already-used GENIE input -> ignored.
-Computed live from the directory listings by `send_analysis.py`.
+## Selection
+- `productionv3/tank/wcsim_<N>.root`, N in [0,499]. Note the extra `tank/` level —
+  productionv2 and testv2 held their files one dir higher.
+- N >= 500 would recycle an already-used GENIE input -> ignored.
+- Numbers already present in the output dir are skipped, whichever producer made them.
+
+The older **productionv2** three-tier set (productionv2 / lmoralep collab / testv2 ->
+`gridtest/`) is **inactive**: it is already complete, and its job-list logic sits
+commented out in the `PRODUCTIONV2 (INACTIVE)` block at the bottom of
+`send_analysis.py`. Passing `-2` exits with a pointer to it. `submit_analysis_job.sh`
+still understands those source names, so reviving it is a matter of restoring that block.
 
 ## Workflow
 
@@ -31,71 +39,51 @@ Computed live from the directory listings by `send_analysis.py`.
    to `$PNFS_SCRATCH/Analysis_grid/genie_analysis/ToolAnalysis.tar.gz` and copies the
    worker scripts alongside it.
 
-3. **Submit** (prints the counts, asks for confirmation). The input set must be named
-   explicitly — there is NO default, since the two sets write different filenames into
-   different dirs and a forgotten flag would silently aim at the wrong dataset:
+3. **Submit** (prints the counts, asks for confirmation):
    ```
-   python3 send_analysis.py -3            # productionv3, everything still missing
-   python3 send_analysis.py -3 122 126    # restrict to N in [122,126] — test batch
-   python3 send_analysis.py -2            # the v2 three-tier set -> gridtest/
+   python3 send_analysis.py            # everything still missing
+   python3 send_analysis.py 122 126    # restrict to N in [122,126] — test batch
    ```
-   Careful with `-2`: its default action also resubmits every "upgradeable" number,
-   overwriting ntuples already in `gridtest/`. Use `-2 --missing-only` to avoid that.
+   Pick a test range that is actually missing: low numbers like `0 4` are already done
+   and would yield zero jobs.
 
 4. **Outputs** land in
-   `$PNFS_PERSISTENT/output/genie_wcsim_tank/gridtest/`
-   as `ANNIEEvent_cc_neutrino_<N>.root` (+ `analysis_log_<N>.txt` per job).
+   `$PNFS_PERSISTENT/output/genie_wcsim_tank/productionv3/tank/fmvmrd/`
+   as `ANNIEEvent_cc_neutrino_v3_<N>.root` (+ `analysis_log_v3_<N>.txt` per job).
 
-   NOTE: this is a SEPARATE dir from the local serial batch
-   (`run_cc_neutrino_fmvmrd_batch.sh`), which writes to `productionv2/fmvmrd/`.
-   Keeping them apart avoids grid-vs-local conflicts when both run at once.
-   The grid job has NO "skip if output exists" logic, so if you re-submit an N
-   whose `gridtest/ANNIEEvent_cc_neutrino_<N>.root` already exists, the new job's
-   copy-back overwrites it.
+   This is the SAME dir and the SAME filenames the serial batch uses, so nothing needs
+   merging afterwards — but see the warning below about running both at once.
+
+   Too-young inputs are deferred (`--min-age`, default 15 min), mirroring the serial
+   script, since upstream WCSim grid jobs may still be uploading. Re-run the sender at
+   the end to sweep up latecomers.
 
 ## Files
 - `tar_analysis.py`        — tar + stage the built ToolAnalysis (run once per build)
-- `send_analysis.py`       — submit one job per N; both input sets, via `--production`
+- `send_analysis.py`       — pick the missing file numbers, submit one job per N
 - `submit_analysis_job.sh` — jobsub_submit wrapper for a single (N, production)
 - `run_analysis_job.sh`    — worker entry point (copies inputs, untars TA, launches container)
 - `analysis_container.sh`  — runs inside toolanalysis:latest: patches configs, runs Analyse
 
-## productionv3
-
-`send_analysis.py -3` (or `--production productionv3`) is the grid analog of the serial
-`EB_BC_TA_work/scripts/run_cc_neutrino_fmvmrd_v3_batch.sh` (tmux session `ccv3_fmvmrd`).
-
-```
-python3 send_analysis.py -3 122 126     # test batch FIRST
-python3 send_analysis.py -3             # then the rest
-```
-
-- Inputs:  `productionv3/tank/wcsim_<N>.root` — note the extra `tank/` level, which
-  productionv2 and testv2 do not have.
-- Outputs: `productionv3/tank/fmvmrd/ANNIEEvent_cc_neutrino_v3_<N>.root` — the SAME dir
-  and filenames the serial batch uses, so there is no merge step, and files the batch
-  already produced are skipped automatically.
-- Too-young inputs are deferred (`--min-age`, default 15 min), mirroring the serial
-  script, since upstream WCSim grid jobs may still be uploading.
-
-### ⚠ Never run the serial batch and these grid jobs at once
+## ⚠ Never run the serial batch and these grid jobs at once
 
 The batch checks "output already exists" at the START of each file's iteration, then
 spends ~10 min in `Analyse` before a BARE `mv` onto pnfs (batch script line 176). pnfs
 refuses to overwrite an existing file, and the batch runs under `set -euo pipefail` — so a
 grid job landing that same N mid-`Analyse` makes the `mv` fail and aborts the WHOLE batch,
-not just that file. `send_analysis.py -3` detects a running batch and refuses to submit
+not just that file. `send_analysis.py` detects a running batch and refuses to submit
 unless `--force` is passed. Stop the tmux session first.
 
-Output filenames are controlled by a TAG threaded `submit_ -> run_ -> analysis_container.sh`.
-`TAG=none` (what the productionv2 mode produces) keeps the original
-`ANNIEEvent_cc_neutrino_<N>.root` names, so the v2 path is unchanged.
+Output filenames come from a TAG threaded `submit_ -> run_ -> analysis_container.sh`.
+`productionv3` sets `TAG=v3`; the inactive v2 path used `TAG=none`, which keeps the
+untagged `ANNIEEvent_cc_neutrino_<N>.root` names.
 
 ## Skip behaviour — where it lives
 
 The **grid job does not skip**. `run_analysis_job.sh` always runs `Analyse` and `ifdh rm`s
 the destination before copying back, so resubmitting an N overwrites its output. All
-skip-if-done logic is in the SENDERS, evaluated at submit time.
+skip-if-done logic is in `send_analysis.py`, evaluated once at submit time — so if the
+serial batch is somehow still running, numbers it finishes after submission get redone.
 
 ## Wall time
 
