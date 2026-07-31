@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+# tar_analysis.py builds this locally, then copies it to pnfs and deletes it.
+ToolAnalysis.tar.gz
