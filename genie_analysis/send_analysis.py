@@ -7,7 +7,9 @@ import subprocess
 
 # Submit FMVMRD analysis grid jobs, one per WCSim file number.
 #
-# Two input sets are supported, selected with --production (default productionv2):
+# Two input sets are supported. The set must be named explicitly (-2 or -3); there is NO
+# default, because the two write different filenames into different dirs and a forgotten
+# flag would silently aim at the wrong dataset.
 #
 # ── productionv2 (default) ────────────────────────────────────────────────────
 # Three-tier input set. Source priority (highest to lowest) for each N in [0,499]:
@@ -42,14 +44,13 @@ import subprocess
 # submit_analysis_job.sh — this script only passes the name through.
 #
 # Usage:
-#   python3 send_analysis.py                      # v2: skip done, submit missing + upgrades
-#   python3 send_analysis.py 0 49                 # restrict to N in [0,49]
-#   python3 send_analysis.py --missing-only       # v2 only: skip the upgrade jobs
-#   python3 send_analysis.py --all                # resubmit everything
-#   python3 send_analysis.py -3                   # productionv3, missing only
-#   python3 send_analysis.py -3 0 4               # productionv3 test batch FIRST
+#   python3 send_analysis.py -3                   # productionv3, everything still missing
+#   python3 send_analysis.py -3 122 126           # productionv3, restrict to N in [122,126]
 #   python3 send_analysis.py -3 --min-age 0       # do not defer freshly-written inputs
 #   python3 send_analysis.py -3 --force           # submit even if the serial batch is running
+#   python3 send_analysis.py -2                   # v2: skip done, submit missing + upgrades
+#   python3 send_analysis.py -2 --missing-only    # v2 only: skip the upgrade jobs
+#   python3 send_analysis.py -2 --all             # resubmit every v2 number
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import PNFS_PERSISTENT
@@ -76,7 +77,15 @@ flag_all          = '--all'          in args
 flag_missing_only = '--missing-only' in args
 flag_force        = '--force'        in args
 
-production = 'productionv2'
+# The input set must be named EXPLICITLY -- there is deliberately no default. The two sets
+# write to different dirs with different filenames, and a forgotten flag silently aims at
+# the wrong dataset. In productionv2 mode the default action also resubmits every
+# "upgradeable" number, overwriting ntuples already in gridtest/, so a silent fallback is
+# not a harmless mistake.
+production = None
+if '-2' in args:
+    production = 'productionv2'
+    args.remove('-2')
 if '-3' in args:
     production = 'productionv3'
     args.remove('-3')
@@ -84,6 +93,13 @@ if '--production' in args:
     i = args.index('--production')
     production = args[i + 1]
     del args[i:i + 2]
+if production is None:
+    sys.exit(
+        'error: no input set given.\n\n'
+        '  -2 | --production productionv2   the three-tier v2/collab/testv2 set -> gridtest/\n'
+        '  -3 | --production productionv3    productionv3/tank -> that dir\'s fmvmrd/\n\n'
+        'e.g.  python3 send_analysis.py -3 122 126     (productionv3 test batch)\n'
+        '      python3 send_analysis.py -3             (all remaining productionv3)\n')
 if production not in ('productionv2', 'productionv3'):
     sys.exit(f'unknown --production {production!r} (expected productionv2 or productionv3)')
 

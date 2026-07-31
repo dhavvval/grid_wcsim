@@ -31,11 +31,16 @@ Computed live from the directory listings by `send_analysis.py`.
    to `$PNFS_SCRATCH/Analysis_grid/genie_analysis/ToolAnalysis.tar.gz` and copies the
    worker scripts alongside it.
 
-3. **Submit** (prints the dedup counts, asks for confirmation):
+3. **Submit** (prints the counts, asks for confirmation). The input set must be named
+   explicitly — there is NO default, since the two sets write different filenames into
+   different dirs and a forgotten flag would silently aim at the wrong dataset:
    ```
-   python3 send_analysis.py            # all files
-   python3 send_analysis.py 0 49       # only N in [0,49] — good for a test batch
+   python3 send_analysis.py -3            # productionv3, everything still missing
+   python3 send_analysis.py -3 122 126    # restrict to N in [122,126] — test batch
+   python3 send_analysis.py -2            # the v2 three-tier set -> gridtest/
    ```
+   Careful with `-2`: its default action also resubmits every "upgradeable" number,
+   overwriting ntuples already in `gridtest/`. Use `-2 --missing-only` to avoid that.
 
 4. **Outputs** land in
    `$PNFS_PERSISTENT/output/genie_wcsim_tank/gridtest/`
@@ -122,9 +127,10 @@ So the flow is: build ToolAnalysis ONCE on the login node (your usual tmux recip
 - **If you hit missing-`.so` errors on the worker:** run one job, read
   `analysis_log_<N>.txt`. Re-tar after any rebuild — the worker runs the tarball's
   binary, not your login-node build.
-- **Test small first:** submit `send_analysis.py 0 4`, confirm the 5 outputs come back
-  and a log looks clean, THEN submit the full set.
-- **Wall time / disk:** productionv2 ROOT is ~112MB / 4000 events; jobs request 12h
-  and 15GB disk. Tune in `submit_analysis_job.sh` after you see real per-job timings.
+- **Test small first:** submit a 5-number range, confirm the outputs come back and a log
+  looks clean, THEN submit the full set. Pick numbers that are actually missing — e.g. for
+  productionv3, `0 4` is already done and would yield zero jobs.
+- **Wall time / disk:** ~112MB (v2) to ~145MB (v3) per file, 4000 events; jobs request
+  4h and 15GB disk. Tune in `submit_analysis_job.sh` if real timings drift.
 - **Re-tar after every rebuild** — the worker runs whatever binary is in the tarball,
   not your login-node build.
