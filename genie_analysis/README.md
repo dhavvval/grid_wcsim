@@ -58,6 +58,38 @@ still understands those source names, so reviving it is a matter of restoring th
    script, since upstream WCSim grid jobs may still be uploading. Re-run the sender at
    the end to sweep up latecomers.
 
+## World volume (`-w`)
+
+```
+python3 send_analysis.py -w 1 1     # single test job
+python3 send_analysis.py -w         # all 500
+```
+
+Inputs `genie_wcsim_world/productionv3/world/wcsim_<N>.root` (500 files, N in [0,499], ~11.5MB
+each), GENIE from `standardv1.0/world/`, outputs to that dir's `fmvmrd/` as
+`ANNIEEvent_cc_neutrino_world_<N>.root`. Runs `CC_MC_RECO_ntuple_bt_world`, which is the same
+17 tools with identical BackTracker/EventSelector/SimpleReconstruction/ANNIEEventTreeMaker
+settings as the tank chain — so the ntuples carry the same branches and the same selection
+cuts. No separate build or tarball is needed.
+
+### GENIE matching differs, and it matters
+
+The tank chain sets `FilePattern gntp.<N>.ghep.root`, which makes LoadGenieEvent walk the
+gtree entry by entry assuming WCSim event *i* came from GENIE entry *i*. That is only valid
+because the tank sample has ~100% yield — measured on `productionv3/tank/wcsim_1.root`,
+0 of 5000 events mismatched.
+
+World runs `/run/beamOn 20000` but only ~700 events deposit light in the tank, so saved events
+sit at scattered GENIE entries — measured on `productionv3/world/wcsim_1.root`: event 0 ->
+entry 8, 1 -> 13, 2 -> 16, ... max 19973, with **700 of 700** mismatched. So `bt_world` uses
+`FilePattern LoadWCSimTool`, which takes the GENIE file and entry per event from the CStore
+(filled by LoadWCSim from the event header's `GetGenieEntryNum()`).
+
+`analysis_container.sh` therefore patches `FileDir` but deliberately does NOT patch
+`FilePattern` when `TAG=world`. Patching it would silently restore sequential matching and
+pair every event with the wrong truth record — no error, just wrong GENIE truth. The WCSim-
+native quantities (`trueWCSimMode`) and the whole lineage chain are unaffected either way.
+
 ## Files
 - `tar_analysis.py`        — tar + stage the built ToolAnalysis (run once per build)
 - `send_analysis.py`       — pick the missing file numbers, submit one job per N

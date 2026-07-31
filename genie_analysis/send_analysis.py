@@ -34,8 +34,10 @@ import subprocess
 # at the wrong dataset.
 #
 # Usage:
-#   python3 send_analysis.py                   # everything still missing
+#   python3 send_analysis.py                   # tank: everything still missing
 #   python3 send_analysis.py 122 126           # restrict to N in [122,126] — test batch
+#   python3 send_analysis.py -w                # world volume instead of tank
+#   python3 send_analysis.py -w 1 1            # single world test job
 #   python3 send_analysis.py --all             # resubmit every N, ignoring existing output
 #   python3 send_analysis.py --min-age 0       # do not defer freshly-written inputs
 #   python3 send_analysis.py --force           # submit even if the serial batch is running
@@ -47,11 +49,22 @@ OUT_BASE   = f'{PNFS_PERSISTENT}/output/genie_wcsim_tank'
 GENIE_DIR  = '/pnfs/annie/persistent/simulations/genie3/G1810a0211a/standardv1.0/tank'
 MAX_N      = 499          # N >= 500 would recycle an already-used GENIE input
 
-PRODSRC    = 'productionv3'
-IN_DIR     = f'{OUT_BASE}/productionv3/tank'
-OUT_DIR    = f'{IN_DIR}/fmvmrd'                    # shared with the serial batch
+WORLD_BASE = f'{PNFS_PERSISTENT}/output/genie_wcsim_world'
 SERIAL_BATCH = 'run_cc_neutrino_fmvmrd_v3_batch.sh'
 DEFAULT_MIN_AGE_MIN = 15   # matches the serial batch's own default
+
+# Volume selection. Both run the same toolchain and produce the same branches; they differ in
+# input dir, GENIE set, and output tag (all resolved by submit_analysis_job.sh from PRODSRC).
+VOLUMES = {
+    'tank':  {'prodsrc': 'productionv3',
+              'in_dir':  f'{OUT_BASE}/productionv3/tank',
+              'out_sub': 'fmvmrd',
+              'prefix':  'ANNIEEvent_cc_neutrino_v3_'},
+    'world': {'prodsrc': 'world',
+              'in_dir':  f'{WORLD_BASE}/productionv3/world',
+              'out_sub': 'fmvmrd',
+              'prefix':  'ANNIEEvent_cc_neutrino_world_'},
+}
 
 # ── flags ─────────────────────────────────────────────────────────────────────
 args = sys.argv[1:]
@@ -63,7 +76,19 @@ if '-2' in args or 'productionv2' in args:
              '(INACTIVE)" block\nin this file to re-enable it. That set is already '
              'complete in gridtest/.')
 if '-3' in args:
-    args.remove('-3')          # accepted as a no-op; productionv3 is the only live set
+    args.remove('-3')          # accepted as a no-op; productionv3 is the tank default
+
+# Volume: tank (default) or world. --world / -w selects the world-volume set.
+volume = 'tank'
+if '--world' in args:
+    volume = 'world'; args.remove('--world')
+if '-w' in args:
+    volume = 'world'; args.remove('-w')
+V = VOLUMES[volume]
+PRODSRC = V['prodsrc']
+IN_DIR  = V['in_dir']
+OUT_DIR = f"{IN_DIR}/{V['out_sub']}"
+OUT_PREFIX = V['prefix']
 
 min_age_min = DEFAULT_MIN_AGE_MIN
 if '--min-age' in args:
@@ -110,7 +135,8 @@ def serial_batch_pids():
 
 
 # ── refuse to run alongside the serial batch (see header) ─────────────────────
-running = serial_batch_pids()
+# Only the tank output dir is shared with that batch; world has no serial producer.
+running = serial_batch_pids() if volume == 'tank' else []
 if running:
     print(f'\n*** WARNING: the serial batch appears to be RUNNING '
           f'(PID {", ".join(running)}) ***')
@@ -127,13 +153,13 @@ if running:
 
 # ── build the job list ────────────────────────────────────────────────────────
 inputs = dir_nums(IN_DIR, 'wcsim_*.root')
-# Shared output dir, so this covers the serial batch's work automatically.
-done_nums = dir_nums(OUT_DIR, 'ANNIEEvent_cc_neutrino_v3_*.root')
+# For tank this dir is shared with the serial batch, so its work is covered automatically.
+done_nums = dir_nums(OUT_DIR, OUT_PREFIX + '*.root')
 
-print(f'\n--- productionv3 inputs ---')
+print(f'\n--- productionv3 {volume} inputs ---')
 print(f'dir:                           {IN_DIR}')
 print(f'wcsim_<N>.root in [0,{MAX_N}]: {len(inputs)}')
-print(f'\n--- Existing outputs (ANNIEEvent_cc_neutrino_v3_<N>.root) ---')
+print(f'\n--- Existing outputs ({OUT_PREFIX}<N>.root) ---')
 print(f'dir:                           {OUT_DIR}')
 print(f'already done:                  {len(done_nums)}')
 

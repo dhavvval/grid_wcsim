@@ -17,7 +17,14 @@ LOG=/srv/analysis_log_${TAG_PREFIX}${PART_NAME}.txt
 touch ${LOG}
 
 REPO=/srv/EB_BC_TA
-CFG=${REPO}/configfiles/CC_MC_RECO_ntuple_neutrino_FMVMRDTEST
+# Toolchain config dir depends on the volume. Both run the same 17 tools with identical
+# BackTracker/EventSelector/SimpleReconstruction/ANNIEEventTreeMaker settings, so the ntuples
+# carry the same branches and cuts; they differ only in the GENIE set and how it is matched.
+if [[ "${TAG}" == "world" ]]; then
+  CFG=${REPO}/configfiles/CC_MC_RECO_ntuple_bt_world
+else
+  CFG=${REPO}/configfiles/CC_MC_RECO_ntuple_neutrino_FMVMRDTEST
+fi
 STAGE=${REPO}/wcsim_staging_cc_neutrino
 mkdir -p "${STAGE}"
 
@@ -52,11 +59,21 @@ patch_config() {  # file key value
 }
 output_name="ANNIEEvent_cc_neutrino_${TAG_PREFIX}${PART_NAME}.root"
 # Workers have no /pnfs mount, so point FileDir at /srv where run_analysis_job.sh ifdh-copied
-# the gntp file. ManualFileMatching stays 0 (sequential entry-by-entry matching).
+# the gntp file. That applies to both volumes.
 patch_config "${CFG}/LoadWCSimConfig"           "InputFile"      "${staged}"
 patch_config "${CFG}/LoadGenieEventConfig"      "FileDir"        "/srv"
-patch_config "${CFG}/LoadGenieEventConfig"      "FilePattern"    "gntp.${PART_NAME}.ghep.root"
 patch_config "${CFG}/ANNIEEventTreeMakerConfig" "OutputFile"     "${output_name}"
+
+# FilePattern MUST NOT be patched for world: it stays "LoadWCSimTool" so LoadGenieEvent takes
+# the GENIE entry per event from the CStore. Only ~3% of world events light the tank, so saved
+# events sit at scattered entries (700/700 mismatched vs 0/5000 for tank) -- patching a
+# gntp.<N> pattern would silently restore sequential matching and misalign every event.
+if [[ "${TAG}" != "world" ]]; then
+  patch_config "${CFG}/LoadGenieEventConfig"    "FilePattern"    "gntp.${PART_NAME}.ghep.root"
+fi
+echo "config dir: ${CFG}" >> ${LOG}
+grep -E '^[[:space:]]*(FilePattern|FileDir|ManualFileMatching)' \
+  "${CFG}/LoadGenieEventConfig" >> ${LOG} 2>&1
 
 echo "running Analyse..." >> ${LOG}
 ./Analyse "${CFG}/ToolChainConfig" >> ${LOG} 2>&1

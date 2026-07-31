@@ -16,16 +16,29 @@ source "${REPO_ROOT}/config.sh"
 
 # Keep ALL jobsub working/cache state OFF /nashome (home quota is full). jobsub_lite
 # writes its sandbox under $XDG_CACHE_HOME/jobsub_lite (defaults to ~/.cache -> /nashome).
-# Redirect it to pnfs scratch so submission never touches the home dir.
-export XDG_CACHE_HOME="${PNFS_SCRATCH}/Analysis_grid/.cache"
-export TMPDIR="${PNFS_SCRATCH}/Analysis_grid/.tmp"
+#
+# These must NOT go on pnfs. dCache is write-once: a file cannot be updated in place. A
+# cache is by definition rewritten, so htgettoken's keycache write either fails outright
+#   Keycache file is immutable. Detailed error: disk I/O error
+# or, worse, WEDGES the submission -- htgettoken parks in uninterruptible sleep (state D,
+# wchan rpc_wait_bit_killable) on the NFS RPC and jobsub_submit never returns. Seen hanging
+# ~10 min on a single job mid-batch. The app area is POSIX, is not /nashome, and supports
+# in-place overwrite, so the token cache actually works and is reused between submissions.
+export XDG_CACHE_HOME="${EXP_BASE}/.cache"
+export TMPDIR="${EXP_BASE}/.tmp"
 mkdir -p "${XDG_CACHE_HOME}" "${TMPDIR}"
 
 # Staging area populated by tar_analysis.py
 export INPUT_PATH="${PNFS_SCRATCH}/Analysis_grid/genie_analysis/"
 
-# GENIE files (LoadGenieEvent still reads gntp.N for truth matching) — same dir both productions use
-export GENIE=/pnfs/annie/persistent/simulations/genie3/G1810a0211a/standardv1.0/tank/
+# GENIE files (LoadGenieEvent reads gntp.N for truth matching). The world volume was
+# generated from its OWN GENIE production (interactions throughout the hall, not just the
+# tank), so it has a separate directory.
+if [[ "${PRODSRC}" == "world" ]]; then
+  export GENIE=/pnfs/annie/persistent/simulations/genie3/G1810a0211a/standardv1.0/world/
+else
+  export GENIE=/pnfs/annie/persistent/simulations/genie3/G1810a0211a/standardv1.0/tank/
+fi
 
 # The WCSim input for THIS number comes from whichever source send_analysis.py picked.
 # NOTE productionv3 nests its files one level deeper (productionv3/tank/), unlike
@@ -34,6 +47,8 @@ if [[ "${PRODSRC}" == "collab" ]]; then
   WCSIM_DIR="/pnfs/annie/scratch/users/lmoralep/output/genie_wcsim"
 elif [[ "${PRODSRC}" == "productionv3" ]]; then
   WCSIM_DIR="${PNFS_PERSISTENT}/output/genie_wcsim_tank/productionv3/tank"
+elif [[ "${PRODSRC}" == "world" ]]; then
+  WCSIM_DIR="${PNFS_PERSISTENT}/output/genie_wcsim_world/productionv3/world"
 else
   WCSIM_DIR="${PNFS_PERSISTENT}/output/genie_wcsim_tank/${PRODSRC}"
 fi
@@ -56,6 +71,10 @@ WCSIM_FILE="${WCSIM_DIR}/wcsim_${RUN}.root"
 if [[ "${PRODSRC}" == "productionv3" ]]; then
   OUTPUT_FOLDER="${PNFS_PERSISTENT}/output/genie_wcsim_tank/productionv3/tank/fmvmrd/"
   TAG="v3"
+elif [[ "${PRODSRC}" == "world" ]]; then
+  # Own fmvmrd/ subdir: the inputs dir already holds the WCSim jobs' *_dummy_output files.
+  OUTPUT_FOLDER="${PNFS_PERSISTENT}/output/genie_wcsim_world/productionv3/world/fmvmrd/"
+  TAG="world"
 else
   OUTPUT_FOLDER="${PNFS_PERSISTENT}/output/genie_wcsim_tank/gridtest/"
   TAG="none"
